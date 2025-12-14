@@ -1,0 +1,42 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Profile {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  instagram_id String   @unique
+  url          String
+  created_at   DateTime @default(now())
+
+  events Event[]
+
+  @@map("profiles")
+}
+
+model Event {
+  id             String    @id @default(uuid())
+  profile_id     String?
+  title          String
+  description    String
+  original_caption String?
+  date           DateTime?
+  location       String?
+  media_url      String?
+  source_url     String?
+  type           String    @default("auto") // "auto" ou "manual"
+  created_at     DateTime  @default(now())
+
+  profile Profile? @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+
+  @@map("events")
+}
+

@@ -1,0 +1,47 @@
+{
+  "name": "batataistem",
+  "version": "1.0.0",
+  "description": "Sistema de monitoramento de eventos do Instagram para Batatais-SP",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "check-env": "node VERIFICAR_ENV.js",
+    "test-db": "node test-db-connection.js",
+    "test-pooling": "node test-pooling-connection.js",
+    "test-direct": "node test-direct-connection.js",
+    "test-instagram": "node test-instagram-token.js",
+    "test-gemini": "node test-gemini-models.js",
+    "atualizar-datas": "node atualizar-datas-eventos.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:push": "prisma db push",
+    "prisma:studio": "prisma studio"
+  },
+  "keywords": [
+    "instagram",
+    "events",
+    "batatais",
+    "monitoring"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google/generative-ai": "^0.2.1",
+    "@supabase/supabase-js": "^2.39.0",
+    "apify-client": "^2.8.2",
+    "axios": "^1.6.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^4.18.2",
+    "instagram-private-api": "^1.45.3",
+    "node-cron": "^3.0.3",
+    "puppeteer": "^21.6.1",
+    "tesseract.js": "^5.1.1",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "prisma": "^5.7.1"
+  }
+}

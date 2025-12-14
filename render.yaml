@@ -1,0 +1,34 @@
+# Configuração para deploy no Render.com
+# Documentação: https://render.com/docs/yaml-spec
+
+services:
+  - type: web
+    name: batataistem
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+    # Variáveis de ambiente devem ser adicionadas manualmente no painel do Render
+    # Não coloque valores sensíveis aqui!
+
+  # Cron Job para sincronização (opcional)
+  - type: cron
+    name: batataistem-sync
+    schedule: "0 * * * *"  # A cada hora
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: node -e "import('./src/jobs/syncProfiles.js').then(m => m.syncAllProfiles())"
+    envVars:
+      - key: NODE_ENV
+        value: production
+    # Mesmas variáveis de ambiente do web service
+

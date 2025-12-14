@@ -1,0 +1,45 @@
+{
+  "name": "Batataistem - Eventos em Batatais-SP",
+  "short_name": "Batataistem",
+  "description": "Agenda completa de eventos em Batatais-SP. Festas, shows, bares e eventos culturais.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#e94560",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["entertainment", "lifestyle", "social"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Novos Eventos",
+      "short_name": "Novos",
+      "description": "Ver eventos mais recentes",
+      "url": "/?filter=new",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Próximos Eventos",
+      "short_name": "Próximos",
+      "description": "Ver eventos futuros",
+      "url": "/?filter=upcoming",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
+
+
+
