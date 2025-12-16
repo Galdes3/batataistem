@@ -4,7 +4,21 @@
  * Este código é fornecido apenas para fins educacionais
  */
 
-import puppeteer from 'puppeteer';
+// Importação dinâmica do Puppeteer (opcional)
+let puppeteerModule = null;
+async function getPuppeteer() {
+  if (puppeteerModule === null) {
+    try {
+      puppeteerModule = await import('puppeteer');
+      return puppeteerModule.default;
+    } catch (error) {
+      console.warn('⚠️  Puppeteer não disponível. Scraping desabilitado.');
+      puppeteerModule = false; // Marca como tentado e falhou
+      return null;
+    }
+  }
+  return puppeteerModule === false ? null : puppeteerModule.default;
+}
 
 // Rate limiting: máximo de requisições por minuto
 const RATE_LIMIT = {
@@ -61,6 +75,7 @@ async function waitForRateLimit() {
  * @returns {Promise<Array>} Array de posts
  */
 export async function getProfilePostsViaScraping(username, limit = 25) {
+  const puppeteer = await getPuppeteer();
   if (!puppeteer) {
     throw new Error('Puppeteer não está instalado. Instale com: npm install puppeteer');
   }
@@ -240,6 +255,10 @@ export async function getProfilePostsViaScraping(username, limit = 25) {
  * @returns {Promise<Object>} Informações do perfil
  */
 export async function getProfileInfoViaScraping(username) {
+  const puppeteer = await getPuppeteer();
+  if (!puppeteer) {
+    throw new Error('Puppeteer não está instalado. Instale com: npm install puppeteer');
+  }
   await waitForRateLimit();
 
   let browser;
