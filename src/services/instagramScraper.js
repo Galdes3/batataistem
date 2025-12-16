@@ -61,6 +61,9 @@ async function waitForRateLimit() {
  * @returns {Promise<Array>} Array de posts
  */
 export async function getProfilePostsViaScraping(username, limit = 25) {
+  if (!puppeteer) {
+    throw new Error('Puppeteer não está instalado. Instale com: npm install puppeteer');
+  }
   console.warn('⚠️  Usando web scraping (não oficial) para buscar posts');
   console.warn('⚠️  Isso pode violar os Termos de Serviço do Instagram');
   

@@ -7,7 +7,7 @@ services:
     env: node
     region: oregon
     plan: free
-    buildCommand: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install --production=false
+    buildCommand: npm install --omit=optional
     startCommand: npm start
     healthCheckPath: /health
     envVars:
@@ -25,7 +25,7 @@ services:
     env: node
     region: oregon
     plan: free
-    buildCommand: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true npm install --production=false
+    buildCommand: npm install --omit=optional
     startCommand: node -e "import('./src/jobs/syncProfiles.js').then(m => m.syncAllProfiles())"
     envVars:
       - key: NODE_ENV
