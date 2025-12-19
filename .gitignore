@@ -34,3 +34,7 @@ Thumbs.db
 dist/
 build/
 
+# Imagens em cache (baixadas durante sincronização)
+public/images/cached/*
+!public/images/cached/.gitkeep
+
