@@ -1,5 +1,6 @@
 import { supabase } from '../utils/supabaseClient.js';
 import { transformCaption } from './geminiService.js';
+import { downloadAndStoreImage, renameCachedImage } from './imageStorageService.js';
 
 /**
  * Envia notificação push para novo evento (não bloqueia)
@@ -270,6 +271,29 @@ export async function createEventFromPost(postData, profileId) {
             mediaUrl: eventData.media_url ? eventData.media_url.substring(0, 80) + '...' : 'N/A'
         });
 
+        // Tentar baixar e armazenar imagem localmente (não bloqueia se falhar)
+        let finalMediaUrl = eventData.media_url;
+        let tempEventId = null;
+        if (eventData.media_url && (eventData.media_url.includes('instagram') || eventData.media_url.includes('fbcdn.net') || eventData.media_url.includes('cdninstagram.com'))) {
+            try {
+                // Gera um ID temporário para o evento (será usado para nomear o arquivo)
+                tempEventId = `temp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+                const cachedImageUrl = await downloadAndStoreImage(eventData.media_url, tempEventId);
+                
+                if (cachedImageUrl) {
+                    console.log(`   ✅ Imagem baixada e armazenada localmente`);
+                    finalMediaUrl = cachedImageUrl;
+                } else {
+                    console.log(`   ⚠️  Não foi possível baixar imagem, usando URL original`);
+                }
+            } catch (error) {
+                console.warn(`   ⚠️  Erro ao tentar baixar imagem (continuando com URL original):`, error.message);
+            }
+        }
+
+        // Atualiza media_url com a URL local se disponível
+        eventData.media_url = finalMediaUrl;
+
         // Cria o evento
         const { data: event, error } = await supabase
             .from('events')
@@ -289,6 +313,24 @@ export async function createEventFromPost(postData, profileId) {
         }
 
         console.log(`✅ Evento criado automaticamente: ${event.title}`);
+        
+        // Renomear imagem no cache se foi baixada com ID temporário
+        if (tempEventId && finalMediaUrl && finalMediaUrl.includes('/images/cached/')) {
+            try {
+                const newImageUrl = await renameCachedImage(tempEventId, event.id);
+                if (newImageUrl) {
+                    // Atualizar media_url no banco com o novo nome
+                    await supabase
+                        .from('events')
+                        .update({ media_url: newImageUrl })
+                        .eq('id', event.id);
+                    event.media_url = newImageUrl;
+                    console.log(`   🔄 URL da imagem atualizada para usar ID do evento`);
+                }
+            } catch (error) {
+                console.warn(`   ⚠️  Erro ao renomear imagem (não crítico):`, error.message);
+            }
+        }
         
         // Envia notificação push para usuários inscritos (em background, não bloqueia)
         if (status === 'approved') {
@@ -468,7 +510,7 @@ export async function listEvents(options = {}) {
 
         const totalEvents = count || sortedEvents.length;
         console.log(`📊 Backend: Retornando ${paginatedEvents.length} eventos de ${totalEvents} total (status=${statusFilter}, limit=${effectiveLimit})`);
-        
+
         return {
             events: paginatedEvents,
             pagination: {
