@@ -146,10 +146,21 @@ async function loadPendingEvents() {
                     ${event.media_url ? `
                         <img 
                             src="${(event.media_url.includes('instagram') || event.media_url.includes('fbcdn.net') || event.media_url.includes('cdninstagram.com')) ? `${API_BASE}/api/images/proxy?url=${encodeURIComponent(event.media_url)}` : event.media_url}" 
+                            data-original-url="${event.media_url || ''}"
                             alt="${escapeHtml(event.title)}" 
                             class="pending-event-image" 
-                            onerror="this.style.display='none'"
-                            onload="console.log('✅ Imagem pendente carregada via proxy');"
+                            onerror="
+                                const img = this;
+                                const originalUrl = img.getAttribute('data-original-url');
+                                if (originalUrl && img.src.includes('/api/images/proxy')) {
+                                    console.log('⚠️ Proxy falhou (pendente), tentando URL original:', originalUrl.substring(0, 80));
+                                    img.src = originalUrl;
+                                    img.onerror = function() { this.style.display='none'; };
+                                } else {
+                                    this.style.display='none';
+                                }
+                            "
+                            onload="console.log('✅ Imagem pendente carregada');"
                         >
                     ` : ''}
                     <div class="pending-event-content">
@@ -925,7 +936,7 @@ function renderEvents() {
     }
 
     console.log(`🔍 Total após filtros: ${filteredEvents.length}`);
-    
+
     if (filteredEvents.length === 0) {
         document.getElementById('events-list').innerHTML = `
             <div class="empty-state">
@@ -1006,11 +1017,22 @@ function renderFeaturedEvents(events) {
                 ${event.media_url ? `
                     <img 
                         src="${(event.media_url.includes('instagram') || event.media_url.includes('fbcdn.net') || event.media_url.includes('cdninstagram.com')) ? `${API_BASE}/api/images/proxy?url=${encodeURIComponent(event.media_url)}` : event.media_url}" 
+                        data-original-url="${event.media_url || ''}"
                         alt="${escapeHtml(event.title)}" 
                         class="featured-event-image" 
                         loading="lazy" 
-                        onerror="console.error('Erro ao carregar imagem featured:', this.src); this.style.display='none';"
-                        onload="console.log('✅ Imagem featured carregada via proxy:', this.src.substring(0, 80));"
+                        onerror="
+                            const img = this;
+                            const originalUrl = img.getAttribute('data-original-url');
+                            if (originalUrl && img.src.includes('/api/images/proxy')) {
+                                console.log('⚠️ Proxy falhou (featured), tentando URL original:', originalUrl.substring(0, 80));
+                                img.src = originalUrl;
+                                img.onerror = function() { this.style.display='none'; };
+                            } else {
+                                this.style.display='none';
+                            }
+                        "
+                        onload="console.log('✅ Imagem featured carregada:', this.src.substring(0, 80));"
                     >
                 ` : ''}
                 <div class="featured-event-content">
@@ -1095,6 +1117,7 @@ function renderEventsGrid(events) {
         };
         
         const imageUrl = getImageUrl(event.media_url);
+        const originalUrl = event.media_url; // URL original para fallback
         
         return `
             <div class="event-card" onclick="showEventDetails('${event.id}')">
@@ -1102,11 +1125,26 @@ function renderEventsGrid(events) {
                     ${imageUrl ? `
                         <img 
                             src="${imageUrl}" 
+                            data-original-url="${originalUrl || ''}"
                             alt="${escapeHtml(event.title)}" 
                             class="event-card-image" 
                             loading="lazy" 
-                            onerror="console.error('Erro ao carregar imagem:', this.src); this.style.display='none'; this.parentElement.innerHTML='<div style=\\'padding:2rem;text-align:center;color:var(--color-text-secondary);\\'>Imagem não disponível</div>';"
-                            onload="console.log('✅ Imagem carregada via proxy:', this.src.substring(0, 80));"
+                            onerror="
+                                const img = this;
+                                const originalUrl = img.getAttribute('data-original-url');
+                                if (originalUrl && img.src.includes('/api/images/proxy')) {
+                                    console.log('⚠️ Proxy falhou, tentando URL original:', originalUrl.substring(0, 80));
+                                    img.src = originalUrl;
+                                    img.onerror = function() {
+                                        this.style.display='none';
+                                        this.parentElement.innerHTML='<div style=\\'padding:2rem;text-align:center;color:var(--color-text-secondary);\\'>Imagem não disponível</div>';
+                                    };
+                                } else {
+                                    this.style.display='none';
+                                    this.parentElement.innerHTML='<div style=\\'padding:2rem;text-align:center;color:var(--color-text-secondary);\\'>Imagem não disponível</div>';
+                                }
+                            "
+                            onload="console.log('✅ Imagem carregada:', this.src.substring(0, 80));"
                         >
                     ` : '<div style="padding:2rem;text-align:center;color:var(--color-text-secondary);">Sem imagem</div>'}
                 </div>
@@ -1835,6 +1873,7 @@ async function showEventDetails(eventId) {
         };
         
         const imageUrlForDetails = getImageUrlForDetails(event.media_url);
+        const originalUrlForDetails = event.media_url; // URL original para fallback
         
         const modalContent = document.getElementById('event-details-content');
         modalContent.innerHTML = `
@@ -1842,9 +1881,22 @@ async function showEventDetails(eventId) {
                 <div class="event-details-image">
                     <img 
                         src="${imageUrlForDetails}" 
+                        data-original-url="${originalUrlForDetails || ''}"
                         alt="${escapeHtml(event.title)}" 
-                        onerror="console.error('❌ Erro ao carregar imagem nos detalhes. URL:', this.src.substring(0, 200)); this.parentElement.innerHTML='<div style=\\'padding:2rem;text-align:center;color:var(--color-text-secondary);\\'><p>Imagem não disponível</p><p style=\\'font-size:0.8em;margin-top:0.5rem;opacity:0.7;\\'>URL pode ter expirado ou estar bloqueada</p></div>';"
-                        onload="console.log('✅ Imagem detalhes carregada via proxy:', this.src.substring(0, 150));"
+                        onerror="
+                            const img = this;
+                            const originalUrl = img.getAttribute('data-original-url');
+                            if (originalUrl && img.src.includes('/api/images/proxy')) {
+                                console.log('⚠️ Proxy falhou (detalhes), tentando URL original:', originalUrl.substring(0, 150));
+                                img.src = originalUrl;
+                                img.onerror = function() {
+                                    this.parentElement.innerHTML='<div style=\\'padding:2rem;text-align:center;color:var(--color-text-secondary);\\'><p>Imagem não disponível</p><p style=\\'font-size:0.8em;margin-top:0.5rem;opacity:0.7;\\'>URL pode ter expirado ou estar bloqueada</p></div>';
+                                };
+                            } else {
+                                this.parentElement.innerHTML='<div style=\\'padding:2rem;text-align:center;color:var(--color-text-secondary);\\'><p>Imagem não disponível</p><p style=\\'font-size:0.8em;margin-top:0.5rem;opacity:0.7;\\'>URL pode ter expirado ou estar bloqueada</p></div>';
+                            }
+                        "
+                        onload="console.log('✅ Imagem detalhes carregada:', this.src.substring(0, 150));"
                     >
                 </div>
             ` : '<div class="event-details-image" style="background:var(--color-bg-tertiary);display:flex;align-items:center;justify-content:center;color:var(--color-text-secondary);">Sem imagem</div>'}

@@ -53,16 +53,55 @@ router.get('/proxy', async (req, res, next) => {
 
     console.log(`📸 Proxying imagem: ${imageUrl.substring(0, 100)}...`);
 
-    // Busca a imagem
-    const response = await axios.get(imageUrl, {
-      responseType: 'stream',
-      timeout: 10000, // 10 segundos
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Referer': 'https://www.instagram.com/',
-        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8'
+    // Headers mais completos para parecer um navegador real
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Referer': 'https://www.instagram.com/',
+      'Origin': 'https://www.instagram.com',
+      'Sec-Fetch-Dest': 'image',
+      'Sec-Fetch-Mode': 'no-cors',
+      'Sec-Fetch-Site': 'cross-site',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
+      'DNT': '1',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1'
+    };
+
+    // Tentar buscar a imagem com retry
+    let response;
+    let lastError;
+    const maxRetries = 3;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        response = await axios.get(imageUrl, {
+          responseType: 'stream',
+          timeout: 15000, // 15 segundos
+          headers: attempt === 1 ? headers : {
+            ...headers,
+            'User-Agent': `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${120 + attempt}.0.0.0 Safari/537.36`
+          },
+          maxRedirects: 5,
+          validateStatus: (status) => status < 500 // Aceita 4xx mas não 5xx
+        });
+        break; // Sucesso, sai do loop
+      } catch (error) {
+        lastError = error;
+        if (attempt < maxRetries) {
+          console.log(`⚠️ Tentativa ${attempt} falhou, tentando novamente...`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Backoff exponencial
+        }
       }
-    });
+    }
+
+    // Se todas as tentativas falharam
+    if (!response) {
+      throw lastError || new Error('Falha ao buscar imagem após múltiplas tentativas');
+    }
 
     // Define headers apropriados
     res.setHeader('Content-Type', response.headers['content-type'] || 'image/jpeg');
@@ -74,13 +113,31 @@ router.get('/proxy', async (req, res, next) => {
     response.data.pipe(res);
 
   } catch (error) {
-    console.error('❌ Erro ao fazer proxy da imagem:', error.message);
+    console.error(`❌ Erro ao fazer proxy da imagem ${imageUrl?.substring(0, 100)}...:`, error.message);
     
     if (error.response) {
-      // Se a imagem retornou erro (404, 403, etc)
-      return res.status(error.response.status).json({
+      const status = error.response.status;
+      console.error(`   Status: ${status}, Headers:`, error.response.headers);
+      
+      // Para 403 (Forbidden), retornar um status específico que o frontend pode detectar
+      if (status === 403) {
+        // Retornar uma imagem placeholder SVG em vez de JSON
+        const placeholderSvg = `<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
+          <rect width="400" height="400" fill="#f0f0f0"/>
+          <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="Arial" font-size="16" fill="#999">
+            Imagem não disponível
+          </text>
+        </svg>`;
+        res.setHeader('Content-Type', 'image/svg+xml');
+        res.setHeader('Cache-Control', 'no-cache');
+        return res.status(200).send(placeholderSvg);
+      }
+      
+      // Para outros erros HTTP, retornar JSON
+      return res.status(status).json({
         error: 'Erro ao buscar imagem',
-        message: error.response.statusText
+        message: error.response.statusText,
+        status: status
       });
     }
 
@@ -90,7 +147,16 @@ router.get('/proxy', async (req, res, next) => {
       });
     }
 
-    next(error);
+    // Para outros erros, retornar placeholder
+    const placeholderSvg = `<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
+      <rect width="400" height="400" fill="#f0f0f0"/>
+      <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="Arial" font-size="16" fill="#999">
+        Erro ao carregar imagem
+      </text>
+    </svg>`;
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'no-cache');
+    return res.status(200).send(placeholderSvg);
   }
 });
 
