@@ -1,36 +1,58 @@
 /**
- * Serviço para baixar e armazenar imagens do Instagram
+ * Serviço para baixar e armazenar imagens do Instagram no Supabase Storage
  * Evita problemas com URLs que expiram ou são bloqueadas
  */
 
 import axios from 'axios';
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { supabase } from '../utils/supabaseClient.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Diretório para armazenar imagens
-const IMAGES_DIR = path.join(__dirname, '../../public/images/cached');
-const IMAGES_URL_BASE = '/images/cached';
+// Bucket do Supabase Storage para imagens
+const STORAGE_BUCKET = 'event-images';
 
 /**
- * Garante que o diretório de imagens existe
+ * Garante que o bucket do Supabase Storage existe
  */
-async function ensureImagesDirectory() {
+async function ensureStorageBucket() {
   try {
-    await fs.mkdir(IMAGES_DIR, { recursive: true });
+    // Verifica se o bucket existe
+    const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+    
+    if (listError) {
+      console.error('Erro ao listar buckets:', listError);
+      return false;
+    }
+    
+    const bucketExists = buckets?.some(bucket => bucket.name === STORAGE_BUCKET);
+    
+    if (!bucketExists) {
+      console.log(`📦 Criando bucket ${STORAGE_BUCKET} no Supabase Storage...`);
+      const { data, error } = await supabase.storage.createBucket(STORAGE_BUCKET, {
+        public: true, // Bucket público para permitir acesso direto às imagens
+        fileSizeLimit: 5242880, // 5MB
+        allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+      });
+      
+      if (error) {
+        console.error(`❌ Erro ao criar bucket:`, error.message);
+        console.log(`💡 Crie o bucket manualmente no Supabase Dashboard: Storage → New bucket → Nome: ${STORAGE_BUCKET} → Public: true`);
+        return false;
+      }
+      
+      console.log(`✅ Bucket ${STORAGE_BUCKET} criado com sucesso`);
+    }
+    
+    return true;
   } catch (error) {
-    console.error('Erro ao criar diretório de imagens:', error);
+    console.error('Erro ao verificar/criar bucket:', error);
+    return false;
   }
 }
 
 /**
- * Baixa uma imagem e salva localmente
+ * Baixa uma imagem e salva no Supabase Storage
  * @param {string} imageUrl - URL da imagem
  * @param {string} eventId - ID do evento (para nomear o arquivo)
- * @returns {Promise<string|null>} URL local da imagem ou null se falhar
+ * @returns {Promise<string|null>} URL pública da imagem no Supabase ou null se falhar
  */
 export async function downloadAndStoreImage(imageUrl, eventId) {
   if (!imageUrl || !imageUrl.startsWith('http')) {
@@ -38,16 +60,21 @@ export async function downloadAndStoreImage(imageUrl, eventId) {
   }
 
   try {
-    await ensureImagesDirectory();
+    // Garantir que o bucket existe
+    const bucketReady = await ensureStorageBucket();
+    if (!bucketReady) {
+      console.warn('⚠️ Bucket não está disponível, pulando download da imagem');
+      return null;
+    }
 
     // Extrair extensão da URL
     const urlObj = new URL(imageUrl);
     const pathname = urlObj.pathname;
-    const ext = path.extname(pathname) || '.jpg';
+    const ext = pathname.match(/\.(jpg|jpeg|png|webp|gif)/i)?.[0] || '.jpg';
     
     // Nome do arquivo baseado no ID do evento
     const filename = `${eventId}${ext}`;
-    const filepath = path.join(IMAGES_DIR, filename);
+    const filePath = `${eventId}/${filename}`;
 
     // Headers para parecer um navegador real
     const headers = {
@@ -61,7 +88,7 @@ export async function downloadAndStoreImage(imageUrl, eventId) {
       'Sec-Fetch-Site': 'cross-site',
     };
 
-    console.log(`📥 Baixando imagem para cache: ${imageUrl.substring(0, 100)}...`);
+    console.log(`📥 Baixando imagem para Supabase Storage: ${imageUrl.substring(0, 100)}...`);
 
     // Baixar imagem
     const response = await axios.get(imageUrl, {
@@ -71,35 +98,71 @@ export async function downloadAndStoreImage(imageUrl, eventId) {
       maxRedirects: 5,
     });
 
-    // Salvar arquivo
-    await fs.writeFile(filepath, response.data);
+    // Detectar content-type
+    const contentType = response.headers['content-type'] || 'image/jpeg';
     
-    console.log(`✅ Imagem salva localmente: ${filename}`);
+    // Upload para Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(filePath, response.data, {
+        contentType: contentType,
+        upsert: true, // Substitui se já existir
+        cacheControl: '3600' // Cache por 1 hora
+      });
+
+    if (uploadError) {
+      console.error(`❌ Erro ao fazer upload para Supabase Storage:`, uploadError.message);
+      return null;
+    }
+
+    // Obter URL pública da imagem
+    const { data: urlData } = supabase.storage
+      .from(STORAGE_BUCKET)
+      .getPublicUrl(filePath);
+
+    if (!urlData?.publicUrl) {
+      console.error(`❌ Erro ao obter URL pública da imagem`);
+      return null;
+    }
+
+    console.log(`✅ Imagem salva no Supabase Storage: ${filename}`);
     
-    // Retornar URL local
-    return `${IMAGES_URL_BASE}/${filename}`;
+    // Retornar URL pública
+    return urlData.publicUrl;
   } catch (error) {
-    console.error(`❌ Erro ao baixar imagem ${imageUrl.substring(0, 100)}...:`, error.message);
+    console.error(`❌ Erro ao baixar/armazenar imagem ${imageUrl.substring(0, 100)}...:`, error.message);
     return null;
   }
 }
 
 /**
- * Verifica se uma imagem já está em cache
+ * Verifica se uma imagem já está no Supabase Storage
  * @param {string} eventId - ID do evento
- * @returns {Promise<string|null>} URL local da imagem ou null se não existir
+ * @returns {Promise<string|null>} URL pública da imagem ou null se não existir
  */
 export async function getCachedImageUrl(eventId) {
   try {
-    await ensureImagesDirectory();
-    
-    const files = await fs.readdir(IMAGES_DIR);
-    const imageFile = files.find(file => file.startsWith(eventId));
-    
-    if (imageFile) {
-      return `${IMAGES_URL_BASE}/${imageFile}`;
+    const { data: files, error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .list(eventId);
+
+    if (error || !files || files.length === 0) {
+      return null;
     }
-    
+
+    // Encontra o primeiro arquivo de imagem
+    const imageFile = files.find(file => 
+      file.name.match(/\.(jpg|jpeg|png|webp|gif)$/i)
+    );
+
+    if (imageFile) {
+      const { data: urlData } = supabase.storage
+        .from(STORAGE_BUCKET)
+        .getPublicUrl(`${eventId}/${imageFile.name}`);
+      
+      return urlData?.publicUrl || null;
+    }
+
     return null;
   } catch (error) {
     console.error('Erro ao verificar cache de imagem:', error);
@@ -108,55 +171,105 @@ export async function getCachedImageUrl(eventId) {
 }
 
 /**
- * Renomeia uma imagem no cache
+ * Renomeia uma imagem no Supabase Storage (move para novo caminho)
  * @param {string} oldEventId - ID antigo do evento
  * @param {string} newEventId - ID novo do evento
- * @returns {Promise<string|null>} Nova URL local ou null se falhar
+ * @returns {Promise<string|null>} Nova URL pública ou null se falhar
  */
 export async function renameCachedImage(oldEventId, newEventId) {
   try {
-    await ensureImagesDirectory();
-    
-    const files = await fs.readdir(IMAGES_DIR);
-    const oldImageFile = files.find(file => file.startsWith(oldEventId));
-    
-    if (oldImageFile) {
-      const ext = path.extname(oldImageFile);
-      const newFilename = `${newEventId}${ext}`;
-      const oldFilepath = path.join(IMAGES_DIR, oldImageFile);
-      const newFilepath = path.join(IMAGES_DIR, newFilename);
-      
-      await fs.rename(oldFilepath, newFilepath);
-      console.log(`🔄 Imagem renomeada: ${oldImageFile} → ${newFilename}`);
-      
-      return `${IMAGES_URL_BASE}/${newFilename}`;
+    // Lista arquivos do evento antigo
+    const { data: files, error: listError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .list(oldEventId);
+
+    if (listError || !files || files.length === 0) {
+      return null;
     }
+
+    // Encontra o arquivo de imagem
+    const imageFile = files.find(file => 
+      file.name.match(/\.(jpg|jpeg|png|webp|gif)$/i)
+    );
+
+    if (!imageFile) {
+      return null;
+    }
+
+    const oldPath = `${oldEventId}/${imageFile.name}`;
+    const ext = imageFile.name.match(/\.(jpg|jpeg|png|webp|gif)$/i)?.[0] || '.jpg';
+    const newPath = `${newEventId}/${newEventId}${ext}`;
+
+    // Baixa o arquivo antigo
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .download(oldPath);
+
+    if (downloadError || !fileData) {
+      return null;
+    }
+
+    // Faz upload no novo caminho
+    const arrayBuffer = await fileData.arrayBuffer();
+    const { error: uploadError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(newPath, arrayBuffer, {
+        contentType: imageFile.metadata?.mimetype || 'image/jpeg',
+        upsert: true
+      });
+
+    if (uploadError) {
+      console.error('Erro ao fazer upload da imagem renomeada:', uploadError);
+      return null;
+    }
+
+    // Remove o arquivo antigo
+    await supabase.storage
+      .from(STORAGE_BUCKET)
+      .remove([oldPath]);
+
+    // Obtém a nova URL pública
+    const { data: urlData } = supabase.storage
+      .from(STORAGE_BUCKET)
+      .getPublicUrl(newPath);
+
+    console.log(`🔄 Imagem renomeada no Supabase Storage: ${oldPath} → ${newPath}`);
     
-    return null;
+    return urlData?.publicUrl || null;
   } catch (error) {
-    console.error('Erro ao renomear imagem no cache:', error);
+    console.error('Erro ao renomear imagem no Supabase Storage:', error);
     return null;
   }
 }
 
 /**
- * Remove imagem do cache
+ * Remove imagem do Supabase Storage
  * @param {string} eventId - ID do evento
  */
 export async function removeCachedImage(eventId) {
   try {
-    await ensureImagesDirectory();
+    const { data: files, error: listError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .list(eventId);
+
+    if (listError || !files || files.length === 0) {
+      return;
+    }
+
+    // Remove todos os arquivos do evento
+    const pathsToRemove = files.map(file => `${eventId}/${file.name}`);
     
-    const files = await fs.readdir(IMAGES_DIR);
-    const imageFile = files.find(file => file.startsWith(eventId));
-    
-    if (imageFile) {
-      const filepath = path.join(IMAGES_DIR, imageFile);
-      await fs.unlink(filepath);
-      console.log(`🗑️ Imagem removida do cache: ${imageFile}`);
+    const { error: removeError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .remove(pathsToRemove);
+
+    if (removeError) {
+      console.error('Erro ao remover imagem do Supabase Storage:', removeError);
+    } else {
+      console.log(`🗑️ Imagem removida do Supabase Storage: ${eventId}`);
     }
   } catch (error) {
-    console.error('Erro ao remover imagem do cache:', error);
+    console.error('Erro ao remover imagem do Supabase Storage:', error);
   }
 }
 
