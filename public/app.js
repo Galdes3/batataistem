@@ -145,7 +145,7 @@ async function loadPendingEvents() {
                 <div class="pending-event-card">
                     ${event.media_url ? `
                         <img 
-                            src="${(event.media_url.includes('instagram') || event.media_url.includes('fbcdn.net') || event.media_url.includes('cdninstagram.com')) ? `${API_BASE}/api/images/proxy?url=${encodeURIComponent(event.media_url)}` : event.media_url}" 
+                            src="${(event.media_url.includes('supabase.co/storage') ? event.media_url : (event.media_url.includes('instagram') || event.media_url.includes('fbcdn.net') || event.media_url.includes('cdninstagram.com')) ? `${API_BASE}/api/images/proxy?url=${encodeURIComponent(event.media_url)}` : event.media_url)}" 
                             data-original-url="${event.media_url || ''}"
                             alt="${escapeHtml(event.title)}" 
                             class="pending-event-image" 
@@ -1109,6 +1109,10 @@ function renderEventsGrid(events) {
         // Função para obter URL da imagem usando proxy se necessário
         const getImageUrl = (url) => {
             if (!url) return null;
+            // Se for URL do Supabase Storage, usa diretamente (não precisa de proxy)
+            if (url.includes('supabase.co/storage')) {
+                return url;
+            }
             // Se for URL do Instagram, usa proxy para evitar CORS
             if (url.includes('instagram') || url.includes('fbcdn.net') || url.includes('cdninstagram.com')) {
                 return `${API_BASE}/api/images/proxy?url=${encodeURIComponent(url)}`;
@@ -1865,6 +1869,10 @@ async function showEventDetails(eventId) {
         // Função para obter URL da imagem usando proxy se necessário
         const getImageUrlForDetails = (url) => {
             if (!url) return null;
+            // Se for URL do Supabase Storage, usa diretamente (não precisa de proxy)
+            if (url.includes('supabase.co/storage')) {
+                return url;
+            }
             // Se for URL do Instagram, usa proxy para evitar CORS
             if (url.includes('instagram') || url.includes('fbcdn.net') || url.includes('cdninstagram.com')) {
                 return `${API_BASE}/api/images/proxy?url=${encodeURIComponent(url)}`;
