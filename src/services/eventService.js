@@ -271,7 +271,7 @@ export async function createEventFromPost(postData, profileId) {
             mediaUrl: eventData.media_url ? eventData.media_url.substring(0, 80) + '...' : 'N/A'
         });
 
-        // Tentar baixar e armazenar imagem localmente (não bloqueia se falhar)
+        // Tentar baixar e armazenar imagem no Supabase Storage (não bloqueia se falhar)
         let finalMediaUrl = eventData.media_url;
         let tempEventId = null;
         if (eventData.media_url && (eventData.media_url.includes('instagram') || eventData.media_url.includes('fbcdn.net') || eventData.media_url.includes('cdninstagram.com'))) {
@@ -281,7 +281,7 @@ export async function createEventFromPost(postData, profileId) {
                 const cachedImageUrl = await downloadAndStoreImage(eventData.media_url, tempEventId);
                 
                 if (cachedImageUrl) {
-                    console.log(`   ✅ Imagem baixada e armazenada localmente`);
+                    console.log(`   ✅ Imagem baixada e armazenada no Supabase Storage`);
                     finalMediaUrl = cachedImageUrl;
                 } else {
                     console.log(`   ⚠️  Não foi possível baixar imagem, usando URL original`);
@@ -291,7 +291,7 @@ export async function createEventFromPost(postData, profileId) {
             }
         }
 
-        // Atualiza media_url com a URL local se disponível
+        // Atualiza media_url com a URL do Supabase Storage se disponível
         eventData.media_url = finalMediaUrl;
 
         // Cria o evento
