@@ -54,3 +54,36 @@ export const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 
 console.log('✅ Cliente Supabase inicializado');
 
+// Teste de conexão inicial (não bloqueia a inicialização)
+(async () => {
+  try {
+    // Tenta uma query simples para verificar se a conexão funciona
+    const { error } = await supabase.from('profiles').select('id').limit(1);
+    if (error) {
+      // Se for erro de DNS/conexão, loga mas não quebra
+      if (error.message?.includes('fetch failed') || error.message?.includes('ENOTFOUND') || error.details?.includes('ENOTFOUND')) {
+        console.error('⚠️  AVISO: Não foi possível conectar ao Supabase na inicialização');
+        console.error('   Verifique se:');
+        console.error('   1. O projeto Supabase está ativo (não pausado)');
+        console.error('   2. A URL SUPABASE_URL está correta no formato: https://[projeto].supabase.co');
+        console.error('   3. As variáveis de ambiente estão configuradas corretamente');
+        console.error(`   URL configurada: ${supabaseUrl.replace(/\/\/.*@/, '//***@')}`);
+      } else {
+        // Outros erros (ex: tabela não existe) são normais na primeira execução
+        console.log('ℹ️  Supabase conectado (algumas tabelas podem não existir ainda)');
+      }
+    } else {
+      console.log('✅ Teste de conexão com Supabase: OK');
+    }
+  } catch (error) {
+    // Erro de conexão DNS
+    if (error.message?.includes('fetch failed') || error.message?.includes('ENOTFOUND') || error.details?.includes('ENOTFOUND')) {
+      console.error('⚠️  AVISO: Erro de DNS ao conectar ao Supabase');
+      console.error('   O servidor iniciará, mas as operações de banco podem falhar');
+      console.error('   Verifique se o projeto Supabase está ativo no dashboard');
+    } else {
+      console.warn('⚠️  Erro ao testar conexão Supabase:', error.message);
+    }
+  }
+})();
+

@@ -41,6 +41,21 @@ router.get('/', async (req, res, next) => {
     const profiles = await profileService.listProfiles();
     res.json({ profiles });
   } catch (error) {
+    // Tratamento de erro de conexão/DNS com Supabase
+    if (error.message && (
+      error.message.includes('fetch failed') ||
+      error.message.includes('ENOTFOUND') ||
+      error.message.includes('getaddrinfo') ||
+      error.details?.includes('ENOTFOUND') ||
+      error.details?.includes('getaddrinfo')
+    )) {
+      console.error('❌ Erro de conexão com Supabase (DNS):', error.message);
+      return res.status(503).json({
+        error: 'Serviço temporariamente indisponível',
+        message: 'Não foi possível conectar ao banco de dados. Verifique se o projeto Supabase está ativo.',
+        profiles: []
+      });
+    }
     next(error);
   }
 });
