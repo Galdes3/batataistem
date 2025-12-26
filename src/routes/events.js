@@ -55,6 +55,22 @@ router.get('/', async (req, res, next) => {
 
     res.json(result);
   } catch (error) {
+    // Tratamento de erro de conexão/DNS com Supabase
+    if (error.message && (
+      error.message.includes('fetch failed') ||
+      error.message.includes('ENOTFOUND') ||
+      error.message.includes('getaddrinfo') ||
+      error.details?.includes('ENOTFOUND') ||
+      error.details?.includes('getaddrinfo')
+    )) {
+      console.error('❌ Erro de conexão com Supabase (DNS):', error.message);
+      return res.status(503).json({
+        error: 'Serviço temporariamente indisponível',
+        message: 'Não foi possível conectar ao banco de dados. Verifique se o projeto Supabase está ativo.',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+    
     // Se o erro for porque o campo status não existe, retorna todos os eventos
     if (error.message && (error.message.includes('column') || error.message.includes('status') || error.message.includes('does not exist'))) {
       console.warn('⚠️  Campo "status" não existe. Retornando todos os eventos.');
@@ -141,6 +157,23 @@ router.get('/pending', async (req, res, next) => {
     const events = await eventService.listPendingEvents();
     res.json({ events, count: events.length });
   } catch (error) {
+    // Tratamento de erro de conexão/DNS com Supabase
+    if (error.message && (
+      error.message.includes('fetch failed') ||
+      error.message.includes('ENOTFOUND') ||
+      error.message.includes('getaddrinfo') ||
+      error.details?.includes('ENOTFOUND') ||
+      error.details?.includes('getaddrinfo')
+    )) {
+      console.error('❌ Erro de conexão com Supabase (DNS):', error.message);
+      return res.status(503).json({
+        error: 'Serviço temporariamente indisponível',
+        message: 'Não foi possível conectar ao banco de dados. Verifique se o projeto Supabase está ativo.',
+        events: [],
+        count: 0
+      });
+    }
+    
     // Se o erro for porque o campo status não existe, retorna array vazio
     if (error.message && (error.message.includes('column') || error.message.includes('status') || error.message.includes('does not exist'))) {
       console.warn('⚠️  Campo "status" não existe. Retornando array vazio.');
