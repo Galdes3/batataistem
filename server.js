@@ -1,15 +1,14 @@
 // IMPORTANTE: Carregar .env ANTES de qualquer outra importação
 // Em produção (Render, etc), as variáveis de ambiente já estão disponíveis
 // então o dotenv é opcional - tentamos carregar, mas não falhamos se não estiver disponível
-(async () => {
-  try {
-    const dotenvModule = await import('dotenv');
-    dotenvModule.default.config();
-  } catch (error) {
-    // Em produção, o dotenv pode não estar disponível, mas as variáveis de ambiente já estão definidas
-    // Não é um erro crítico - as variáveis de ambiente do sistema serão usadas
-  }
-})();
+import dotenv from 'dotenv';
+try {
+  dotenv.config();
+} catch (error) {
+  // Em produção, o dotenv pode não estar disponível, mas as variáveis de ambiente já estão definidas
+  // Não é um erro crítico - as variáveis de ambiente do sistema serão usadas
+  console.log('ℹ️ dotenv não disponível, usando variáveis de ambiente do sistema');
+}
 
 // Verificar configuração do Supabase
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {

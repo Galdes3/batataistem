@@ -92,3 +92,9 @@ WHERE deleted_at < NOW() - INTERVAL '1 year';
 
 
 
+
+
+
+
+
+

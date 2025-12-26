@@ -25,3 +25,9 @@ COMMENT ON TABLE "deleted_events" IS 'Rastreia eventos excluídos para evitar re
 
 
 
+
+
+
+
+
+
